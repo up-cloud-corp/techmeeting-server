@@ -3,7 +3,13 @@ import {Pose2DMap, clonePose2DMap, cloneV2} from './coordinates'
 import {BMMessage as Message, ObjectArrayMessage} from './DataMessage'
 import {MessageType} from './DataMessageType'
 import {ObjectArrayMessageTypes, StringArrayMessageTypes} from './DataMessageType'
+import { roomPersistence } from './RoomPersistence'
 import websocket from 'ws'
+
+const config = require('../../config')
+
+// Constants for persistence timing (now using config values)
+// const PERSISTENCE_DEBOUNCE_DELAY = 5000 // 5 seconds delay for debounced saves
 
 export interface Content{
   content: ISharedContent,
@@ -201,8 +207,98 @@ export class RoomStore {
   contents = new Map<string, Content>()     //  room contents
   chatMessages: ChatMessage[] = [];         // Property to store chat history
 
+  // Persistence related properties
+  //  saveTimer is used to debounce the saveToStorage() call.
+  //  lastModified is used to check if the data is modified.
+  // ver1.3.0
+  saveTimer?: NodeJS.Timeout
+  lastModified = 0  // Will be set when data is actually modified
+
   constructor(roomId: string){
     this.id = roomId
+    // Load persistent data on startup
+    this.loadFromStorage()
+  }
+
+  // Load data from storage
+  private loadFromStorage() {
+    try {
+      const savedData = roomPersistence.loadRoom(this.id)
+      if (savedData) {
+        // Restore properties
+        if (savedData.properties) {
+          this.properties = savedData.properties
+        }
+
+        // Restore wallpaper contents
+        if (savedData.contents) {
+          for (const content of savedData.contents) {
+            this.contents.set(content.content.id, content)
+          }
+        }
+
+        console.log(`Room ${this.id} restored from storage`)
+      }
+    } catch (error) {
+      console.error(`Failed to load room ${this.id} from storage:`, error)
+    }
+  }
+
+  // Call this method when data is modified (save with debounce)
+  markModified() {
+    this.lastModified = Date.now()
+
+    // Save after 5 seconds (debounce to avoid frequent saves)
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer)
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveToStorage()
+    }, config.roomPersistence.debounceDelay)
+  }
+
+  // Save data to storage
+  private async saveToStorage() {
+    try {
+      await roomPersistence.saveRoom(this)
+    } catch (error) {
+      console.error(`Failed to save room ${this.id}:`, error)
+    }
+  }
+
+  // Set room property (triggers persistence only if wallpaper content exists)
+  setProperty(key: string, value: string) {
+    this.properties.set(key, value)
+    
+    // Only save if wallpaper content exists
+    if (this.hasWallpaperContent()) {
+      this.markModified()
+    }
+  }
+
+  // Delete room property (triggers persistence only if wallpaper content exists)
+  deleteProperty(key: string) {
+    this.properties.delete(key)
+    
+    // Only save if wallpaper content exists
+    if (this.hasWallpaperContent()) {
+      this.markModified()
+    }
+  }
+
+  // Check if room has wallpaper content
+  private hasWallpaperContent(): boolean {
+    return Array.from(this.contents.values()).some(c => isContentWallpaper(c.content))
+  }
+
+  // Update room content (triggers persistence only for wallpapers)
+  updateContent(content: Content) {
+    this.contents.set(content.content.id, content)
+
+    // Save only when wallpaper content is updated
+    if (isContentWallpaper(content.content)) {
+      this.markModified()
+    }
   }
 
   getParticipant(pid: string, sock: websocket.WebSocket){
@@ -229,9 +325,14 @@ export class RoomStore {
       if (this.participants.length){
         console.error(`Participants ${this.participants.map(p => p.id)} remains.`)
       }
+
+      // Remove contents other than wallpapers
       this.contents.forEach(c => {
-        if (!isContentWallpaper(c.content)){ this.contents.delete(c.content.id) }
+        if (!isContentWallpaper(c.content)) {
+          this.contents.delete(c.content.id)
+        }
       })
+
       console.log(`Room ${this.id} closed.`)
     }
   }
@@ -282,7 +383,6 @@ export class RoomStore {
     const chatMessage = JSON.parse(msg.v) as ChatMessage;
     chatMessage.from = from.id;
     this.chatMessages.push(chatMessage);
-    // console.log(`chatMessages: ${this.chatMessages}`)
   }
 }
 
@@ -294,12 +394,16 @@ export class Rooms{
   rooms = new Map<string, RoomStore>()
   sockMap = new Map<websocket.WebSocket, PandR>()
   sendCount = 0;
-  getOrCreate(name: string){
+  getOrCreate(name: string) {
     const found = this.rooms.get(name)
     if (found){
+      if (roomPersistence.loadRoom(name)) {
+        found.markModified()
+      }
       return found
     }
     const create = new RoomStore(name)
+    create.markModified()
     this.rooms.set(name, create)
     console.log(`Room ${name} created. Rooms:`, Array.from(this.rooms.keys()))
     return create

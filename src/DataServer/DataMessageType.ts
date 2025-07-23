@@ -70,7 +70,7 @@ export const MessageType = {
   //  special
   PARTICIPANT_LEFT: 'm_participant_left',       //  id:string,  remove info
   PARTICIPANT_LEFT_BY_ERROR: 'm_participant_left_error',       //  id:string
-  ROOM_PROP:  'room_prop',                      //  [name:string, value:string], set room property
+  ROOM_PROP:  'room_prop',                      //  {[key:string]: string}, set room properties ver1.3.0
   REQUEST_TO: 'req_to',                         //  ids:string[], request for info of specific participant
   PONG: 'o',                                    //  pong message
 }
