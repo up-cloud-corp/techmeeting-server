@@ -74,12 +74,20 @@ messageHandlers.set(MessageType.PARTICIPANT_MOUSE, (msg, from, room) => {
 })
 
 messageHandlers.set(MessageType.ROOM_PROP, (msg, _from, room) => {
-  const [key, val] = JSON.parse(msg.v) as [string, string|undefined]
-  if (val === undefined){
-    room.properties.delete(key)
-  }else{
-    room.properties.set(key, val)
+  const data = JSON.parse(msg.v)
+  // Format: {key1: value1, key2: value2}
+  // ver1.3.0
+  if (data && typeof data === 'object') {
+    const props = data as {[key: string]: string | undefined};
+    for (const [key, val] of Object.entries(props)) {
+      if (val === undefined) {
+        room.deleteProperty(key)
+      } else {
+        room.setProperty(key, val)
+      }
+    }
   }
+
   const remotes = Array.from(room.participants.values()).filter(remote => remote.id !== msg.p)
   remotes.forEach(remote => remote.messagesTo.push(msg))
 })
@@ -88,9 +96,16 @@ messageHandlers.set(MessageType.REQUEST_ALL, (_msg, from, room) => {
   room.participants.forEach(remote => {
     remote.storedMessages.forEach(msg => from.pushOrUpdateMessage(msg))
   })
-  room.properties.forEach((val, key) => {
-    from.messagesTo.push({t:MessageType.ROOM_PROP, v:JSON.stringify([key, val])})
-  })
+
+  // Send existing room properties to new client in unified format (ver1.3.0)
+  if (room.properties.size > 0) {
+    const props: {[key: string]: string} = {}
+    room.properties.forEach((val, key) => {
+      props[key] = val
+    })
+    from.messagesTo.push({t:MessageType.ROOM_PROP, v:JSON.stringify(props)})
+  }
+
   from.messagesTo.push({t:MessageType.REQUEST_ALL,v:JSON.stringify({})})
   //console.log('Reply REQUEST_ALL')
   from.sendMessages()
@@ -347,7 +362,6 @@ messageHandlers.set(MessageType.PARTICIPANT_LEFT_BY_ERROR, (msg, from, room) => 
 })
 
 messageHandlers.set(MessageType.CONTENT_UPDATE_REQUEST, (msg, from, room) => {
-  //console.log(JSON.stringify(msg))
   const cs = JSON.parse(msg.v) as ISharedContent[]
   const time = room.tick
   for(const newContent of cs){
@@ -357,15 +371,15 @@ messageHandlers.set(MessageType.CONTENT_UPDATE_REQUEST, (msg, from, room) => {
       c.timeUpdate = time
       if (!isEqualSharedContentInfo(c.content, newContent)) { c.timeUpdateInfo = time }
       c.content = newContent
-    }else{
-      c = {content:newContent, timeUpdate: time, timeUpdateInfo: time}
-      room.contents.set(c.content.id, c)
+    } else {
+      c = {content: newContent, timeUpdate: time, timeUpdateInfo: time}
     }
-    //  The sender should not receive the update.
+
+    room.updateContent(c)
+
     from.contentsSent.set(c, createContentSent(c))
-    from.contentsInfoSent.set(c, {content:c.content, timeSent: c.timeUpdateInfo})
+    from.contentsInfoSent.set(c, {content: c.content, timeSent: c.timeUpdateInfo})
   }
-  //  console.log(`Contents update ${cs.map(c=>c.id)} at ${time}`)
 })
 
 messageHandlers.set(MessageType.CONTENT_REMOVE_REQUEST, (msg, from, room) => {
