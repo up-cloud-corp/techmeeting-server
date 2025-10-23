@@ -76,7 +76,9 @@ export class ParticipantStore {
   id: string
   socket:websocket.WebSocket
   //  participant related
-  onStage = false
+  // ver1.4 change false to true
+  onStage = true
+  onStageStatus: number = 0             // ver1.4.0 0:not on stage, 1:on stage, 2:off stage
   storedMessages = new Map<string, Message>()   //  key=type
   participantStates = new Map<string, ParticipantState>() //  key=type
   timeSentStates = new Map<string, number>()
@@ -88,8 +90,10 @@ export class ParticipantStore {
 
   //  mouse related
   mouseMessageValue?: string
-  mousePos?: [number,number]
+  mousePos?: [number,number]  
   mouseUpdateTime = 0
+  mouseShow: boolean = false              // ver1.4.0 mouse sharing state
+  mouseShowStatus: number = 0             // ver1.4.0 0:no sharing, 1=start sharing, 2=stop sharing
   mousesSent:Map<ParticipantStore, ParticipantSent> = new Map()
 
   //  contents related
@@ -179,6 +183,30 @@ export class ParticipantStore {
         this.mousesSent.set(p, sent)
       }
       this.pushOrUpdateMessage({t:MessageType.PARTICIPANT_MOUSE, v:p.mouseMessageValue, p:sent.participant.id})
+    }
+  }
+  // ver1.4.0 add function to get mouseShowStatus
+  // 0: no sharing, 1: start sharing, 2: stop sharing
+  getMouseShowStatus(newMouseShow: boolean): number {
+    if (newMouseShow === true) {
+      return 1
+    }
+    if (this.mouseShow === true) {
+      return 2
+    } else {
+      return 0
+    }
+  }
+  // ver1.4.0 add function to get onStageStatus
+  // 0: not on stage, 1: on stage, 2: off stage
+  getOnStageStatus(newOnStage: boolean): number {
+    if (newOnStage === true) {
+      return 1
+    }
+    if (this.onStage === true) {
+      return 2
+    } else {
+      return 0
     }
   }
 
