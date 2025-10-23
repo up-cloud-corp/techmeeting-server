@@ -64,13 +64,23 @@ messageHandlers.set(MessageType.PARTICIPANT_POSE, (msg, from, room) => {
   from.participantStates.set(msg.t, {type:msg.t, value:msg.v, updateTime:room.tick})
 })
 messageHandlers.set(MessageType.PARTICIPANT_ON_STAGE, (msg, from, room) => {
-  from.onStage = JSON.parse(msg.v)
+  // ver1.4.0 add on stage status
+  const newOnStage = JSON.parse(msg.v)
+  from.onStageStatus = from.getOnStageStatus(newOnStage)
+  from.onStage = newOnStage
   from.participantStates.set(msg.t, {type:msg.t, value:msg.v, updateTime:room.tick})
 })
 messageHandlers.set(MessageType.PARTICIPANT_MOUSE, (msg, from, room) => {
   from.mousePos = str2Mouse(JSON.parse(msg.v)).position
   from.mouseMessageValue = msg.v
   from.mouseUpdateTime = room.tick
+  // ver1.4.0 add mouse show sync flag
+  const newMouseShow = str2Mouse(JSON.parse(msg.v)).show
+  // Set sync flag based on state transition
+  from.mouseShowStatus = from.getMouseShowStatus(newMouseShow)
+  from.mouseShow = newMouseShow
+  // ver1.4.0 add message as one of the state of the participant.
+  from.participantStates.set(msg.t, {type:msg.t, value:msg.v, updateTime:room.tick})
 })
 
 messageHandlers.set(MessageType.ROOM_PROP, (msg, _from, room) => {
@@ -116,7 +126,7 @@ messageHandlers.set(MessageType.PONG, (_msg) => {})
 
 function pushParticipantsInRangeOrMovedOut(from:ParticipantStore, room:RoomStore, visible:number[], audible:number[]){
   //  Push participants updated and in the range.
-  const overlaps = room.participants.filter(p => p.id !== from.id && (p.onStage
+  const overlaps = room.participants.filter(p => p.id !== from.id && (p.onStageStatus > 0 || p.mouseShowStatus > 0
     || (p.pose && (isInRect(p.pose.position, visible) || isInCircle(p.pose.position, audible)))
     )
   )
