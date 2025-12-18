@@ -10,7 +10,7 @@
     "debug": "^4.3.4",
     "express": "^4.18.2",
     "googleapis": "^132.0.0",
-    "mediasoup": "3.11.9",
+    "mediasoup": "3.18.1",
     "shelljs": "^0.8.5",
     "ts-node": ">10.8.1",
     "typescript": ">4.7.3",
@@ -28,6 +28,7 @@
     "build": "npx tsc",
     "main": "ts-node-dev --respawn  --inspect=8228 -- src/main.ts",
     "media": "export NODE_TLS_REJECT_UNAUTHORIZED=0;ts-node-dev --respawn --inspect=8229 -- src/media.ts",
-    "wscat": "export NODE_TLS_REJECT_UNAUTHORIZED=0;wscat -c wss://localhost:3000"
+    "wscat": "export NODE_TLS_REJECT_UNAUTHORIZED=0;wscat -c wss://localhost:3000",
+    "cleanup-rooms": "ts-node src/scripts/cleanupRooms.ts"
   }
 }

@@ -5,7 +5,6 @@ import {getPort, releasePort} from './port'
 import * as mediasoup from 'mediasoup'
 import { producers } from '../media';
 import { assert } from 'console'
-import { RtpCapabilities, RtpCodecCapability } from 'mediasoup/node/lib/RtpParameters'
 
 const config = require('../../config');
 //console.log(JSON.stringify(config))
@@ -132,14 +131,15 @@ export function publishProducer(streamer:Streamer, router:mediasoup.types.Router
 
         // Start the consumer paused
         // Once the gstreamer process is ready to consume resume and send a keyframe
-        const codecs:RtpCodecCapability[] = [];
+        // ver1.5.0 fixed type error in mediasoup 3.18.1
+        const codecs:mediasoup.types.RtpCodecCapability[] = [];
         // Codec passed to the RTP Consumer must match the codec in the Mediasoup router rtpCapabilities
         const routerCodec = router.rtpCapabilities.codecs?.find(
           codec => codec.kind === producer.kind && (producer.kind!=='video' || codec.mimeType==='video/H264')
         )
         if (routerCodec) codecs.push(routerCodec)
-
-        const rtpCapabilities:RtpCapabilities = {
+        // ver1.5.0 fixed type error in mediasoup 3.18.1
+        const rtpCapabilities:mediasoup.types.RtpCapabilities = {
           codecs,
         }
         rtpTransport.consume({

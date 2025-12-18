@@ -1,4 +1,3 @@
-import { MediaKind, RtpParameters } from 'mediasoup/node/lib/RtpParameters';
 import { Readable } from 'stream'
 import * as mediasoup from 'mediasoup'
 
@@ -13,7 +12,8 @@ export function convertStringToStream(stringToConvert: string){
 };
 
 // Gets codec information from rtpParameters
-export function getCodecInfoFromRtpParameters(kind: MediaKind, rtpParameters:mediasoup.types.RtpParameters){
+// ver1.5.0 fixed type error in mediasoup 3.18.1
+export function getCodecInfoFromRtpParameters(kind: mediasoup.types.MediaKind, rtpParameters:mediasoup.types.RtpParameters){
   return {
     payloadType: rtpParameters.codecs[0].payloadType,
     codecName: rtpParameters.codecs[0].mimeType.replace(`${kind}/`, ''),
