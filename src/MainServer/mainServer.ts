@@ -53,6 +53,15 @@ export function sendMSMessage<MSM extends MSMessage>(msg: MSM, ws: websocket.Web
   ws.send(JSON.stringify(msg))
 }
 
+export function sendToRecordedWorker(workerId: string | undefined, msg: MSMessage, fallback?: Worker) {
+  const recorded = workerId ? mainServer.workers.get(workerId) : undefined
+  if (workerId) {
+    if (recorded?.ws) sendMSMessage(msg, recorded.ws)
+    return
+  }
+  if (fallback?.ws) sendMSMessage(msg, fallback.ws)
+}
+
 export function sendRoom<MSM extends MSMessage>(msg: MSM, room:Room){
   if (room?.peers){
     for(const peer of room.peers.values()){
@@ -92,11 +101,10 @@ export function deletePeer(peer: Peer){
       peer: peer.peer,
       producer: producer.id,
     }
-    if (peer.worker?.ws){
-      sendMSMessage(msg, peer.worker.ws)
-    }
+    sendToRecordedWorker(peer.producerWorkers.get(producer.id), msg, peer.worker)
   })
   peer.producers=[]
+  peer.producerWorkers.clear()
 
   peer.transports.forEach(transport => {
     const msg: MSCloseTransportMessage= {
@@ -104,11 +112,10 @@ export function deletePeer(peer: Peer){
       transport,
     }
     consoleDebug(`Send ${msg.type} for ${msg.transport}`)
-    if (peer.worker?.ws){
-      sendMSMessage(msg, peer.worker.ws)
-    }
+    sendToRecordedWorker(peer.transportWorkers.get(transport), msg, peer.worker)
   })
   peer.transports=[]
+  peer.transportWorkers.clear()
 
   remoteLeft([peer.peer], peer.room!)
   peers.delete(peer.peer)
@@ -229,7 +236,9 @@ export function addConnectListener(ws: websocket){
         //  create peer
         const now = Date.now()
         const peer:Peer = {
-          peer:unique, ws, producers:[], transports:[], lastSent:now, lastReceived:now,
+          peer:unique, ws, producers:[], transports:[],
+          transportWorkers: new Map(), producerWorkers: new Map(),
+          lastSent:now, lastReceived:now,
           isAdmin:role==='admin'
         }
         mainServer.peers.set(unique, peer)

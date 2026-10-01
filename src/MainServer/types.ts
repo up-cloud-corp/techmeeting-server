@@ -36,10 +36,12 @@ export interface Peer extends MSRemotePeer{
   room?: Room
   worker?: Worker
   transports:string[]
+  transportWorkers: Map<string, string>
+  producerWorkers: Map<string, string>
 }
 
 export function toMSRemotePeer(peer: Peer):MSRemotePeer{
-  const {ws, lastReceived, lastSent, interval, room, worker, ...ms} = peer
+  const {ws, lastReceived, lastSent, interval, room, worker, transportWorkers, producerWorkers, ...ms} = peer
   return ms
 }
 

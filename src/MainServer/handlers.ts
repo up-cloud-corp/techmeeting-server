@@ -5,7 +5,7 @@ import { MSCheckAdminMessage, MSCloseProducerMessage, MSCloseTransportMessage,
     MSRemoteUpdateMessage, MSRoomMessage, MSAddAdminMessage, MSUploadFileMessage,
     MSWorkerUpdateMessage } from "../MediaServer/MediaMessages";
 import { findRoomLoginInfo, loginInfo } from "./mainLogin";
-import { deletePeer, getPeer, getPeerAndWorker, handlersForPeer, handlersForWorker, mainServer, remoteUpdated, sendMSMessage } from "./mainServer";
+import { deletePeer, getPeer, getPeerAndWorker, handlersForPeer, handlersForWorker, mainServer, remoteUpdated, sendMSMessage, sendToRecordedWorker } from "./mainServer";
 import { Peer, toMSRemotePeer } from "./types";
 import { consoleDebug, consoleError, stamp, userLog } from "./utils";
 
@@ -288,7 +288,10 @@ export function initHandlers(){
       }
       return
     }
-    if (msg.transport){ peer.transports.push(msg.transport) }
+    if (msg.transport){
+      peer.transports.push(msg.transport)
+      peer.transportWorkers.set(msg.transport, worker.id)
+    }
     peer.lastSent = Date.now()
     sendMSMessage(base, peer.ws)
   })
@@ -320,6 +323,7 @@ export function initHandlers(){
         consoleDebug(`new producer, role "${msg.role}" and kind "${msg.kind}" created for peer "${peer.peer}".`)
       }
       peer.producers.push({id:msg.producer, kind: msg.kind, role: msg.role})
+      peer.producerWorkers.set(msg.producer, worker.id)
     }
     peer.lastSent = Date.now()
     sendMSMessage(base, peer.ws)
@@ -329,12 +333,16 @@ export function initHandlers(){
     const msg = base as MSCloseProducerMessage
     const peer = mainServer.peers.get(msg.peer)
     if (peer){
+      const workerId = peer.producerWorkers.get(msg.producer)
       peer.producers = peer.producers.filter(pr => pr.id !== msg.producer)
+      peer.producerWorkers.delete(msg.producer)
       consoleDebug(`Close producer ${msg.producer}` +
         `remains:[${peer.producers.map(rp => rp.id).reduce((prev, cur)=>`${prev} ${cur}`, '')}]`)
       remoteUpdated([peer], peer.room!)
+      sendToRecordedWorker(workerId, msg, peer.worker)
+    }else{
+      relayPeerToWorker(base)
     }
-    relayPeerToWorker(base)
   })
   handlersForWorker.set('closeProducer', relayWorkerToPeer)
 
